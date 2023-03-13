@@ -1,9 +1,8 @@
 #include "leptjson.h"
 #include <assert.h>  /* assert() */
 #include <stdlib.h>  /* NULL, strtod() */
-
+#include <math.h> /*inf*/
 #define EXPECT(c, ch)       do { assert(*c->json == (ch)); c->json++; } while(0)
-
 typedef struct {
     const char* json;
 }lept_context;
@@ -14,7 +13,7 @@ static void lept_parse_whitespace(lept_context* c) {
         p++;
     c->json = p;
 }
-
+/*
 static int lept_parse_true(lept_context* c, lept_value* v) {
     EXPECT(c, 't');
     if (c->json[0] != 'r' || c->json[1] != 'u' || c->json[2] != 'e')
@@ -41,11 +40,62 @@ static int lept_parse_null(lept_context* c, lept_value* v) {
     v->type = LEPT_NULL;
     return LEPT_PARSE_OK;
 }
+*/
+
+
+
+int __checkValidNum(const char * start)
+{
+    int err_no = LEPT_PARSE_INVALID_VALUE;
+    if(*start == '-')
+        start++;
+    if(*start == '0')
+    {
+        start++;
+        if(*start>='0'&&*start<='9') return LEPT_PARSE_ROOT_NOT_SINGULAR;
+    }
+    else if(*start>='1'&&*start<='9')
+       { while (*start>='0'&&*start<='9') start++;err_no = LEPT_PARSE_ROOT_NOT_SINGULAR;}
+    else
+        return err_no;
+    if(*start == '\0') return LEPT_PARSE_OK;
+    if(!(*start=='.'||*start=='e'||*start=='E')) return LEPT_PARSE_ROOT_NOT_SINGULAR;
+    /*. e  E*/
+    int has_frac = (*start == '.')?1:0;
+    if(has_frac)
+    {
+        /*frac*/
+        start++;
+        if(*start == '\0') return LEPT_PARSE_INVALID_VALUE;
+        while (*start>='0'&&*start<='9') start++;
+        if(*start == '\0') return LEPT_PARSE_OK;
+    }
+    /*exp*/
+    if(!(*start == 'e'||*start == 'E')) return err_no;
+    start++;
+    if(*start == '\0') return err_no;
+    if(*start == '+'||*start =='-') start++;
+    if(*start == '\0') return err_no;
+    while (*start>='0'&&*start<='9') start++;
+
+    return *start == '\0'?LEPT_PARSE_OK:err_no;
+}
+
 
 static int lept_parse_number(lept_context* c, lept_value* v) {
     char* end;
     /* \TODO validate number */
+    const char * start = c->json;
+    int check = __checkValidNum(start);
+    if(check != LEPT_PARSE_OK)
+    {
+        v->type = LEPT_NULL;
+        return check;
+    }
+    /*check "-"*/
     v->n = strtod(c->json, &end);
+    if(isinf(v->n))
+        return LEPT_PARSE_NUMBER_TOO_BIG;
     if (c->json == end)
         return LEPT_PARSE_INVALID_VALUE;
     c->json = end;
@@ -53,11 +103,26 @@ static int lept_parse_number(lept_context* c, lept_value* v) {
     return LEPT_PARSE_OK;
 }
 
+static int lept_parse_literal(lept_context * c, lept_value * v,const char * cmp,size_t cmp_length,int target_value_type)
+{
+    int i = 0;
+    for(;i<cmp_length;i++)
+    {
+        if(c->json[i]!=cmp[i])
+        {
+            return LEPT_PARSE_INVALID_VALUE;
+        }
+    }
+    v->type = target_value_type;
+    c->json += cmp_length;
+    return LEPT_PARSE_OK;
+}
+
 static int lept_parse_value(lept_context* c, lept_value* v) {
     switch (*c->json) {
-        case 't':  return lept_parse_true(c, v);
-        case 'f':  return lept_parse_false(c, v);
-        case 'n':  return lept_parse_null(c, v);
+        case 't':  return lept_parse_literal(c, v,"true",4,LEPT_TRUE);
+        case 'f':  return lept_parse_literal(c, v,"false",5,LEPT_FALSE);
+        case 'n':  return lept_parse_literal(c, v,"null",4,LEPT_NULL);
         default:   return lept_parse_number(c, v);
         case '\0': return LEPT_PARSE_EXPECT_VALUE;
     }
