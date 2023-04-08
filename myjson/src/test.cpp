@@ -1,119 +1,4 @@
-#include<string>
-#include<limits.h>
-#include<iostream>
-#include<variant>
-#include<vector>
-#include<set>
-#include<unordered_map>
-class JsonNode;
-using String = std::string;
-using Null = std::monostate;
-using JsonArray = std::set<JsonNode>;
-using Value = std::variant<Null, bool, double, String,JsonArray>;
-
-struct JsonValue
-{
-	JsonValue(const Value &&val) :__value(std::move(val)){}
-	JsonValue(const Value &&val,bool array_type)
-		:__value(std::move(val)),array_type(array_type){}
-	Value __value;
-	bool array_type = false;
-	std::string toString()const
-	{
-		std::string result;
-		std::visit(
-			[&](auto && arg)
-			{
-				using T = std::decay_t<decltype(arg)>;
-				if constexpr (std::is_same_v<T, double>)
-				{
-					result += to_string(arg);
-				}
-				else if constexpr (std::is_same_v<T, String>)
-				{
-					result.push_back('\"');
-					result += arg;
-					result.push_back('\"');
-				}
-				else if constexpr (std::is_same_v<T, Null>)
-				{
-					result += "null";
-				}
-				else if constexpr (std::is_same_v<T, bool>)
-				{
-					result += arg ? "true" : "false";
-				}
-				else if constexpr (std::is_same_v<T, JsonArray>)
-				{
-					if (this->array_type)
-					{
-						result += '[';
-						for (auto && v : arg)
-						{
-							result += v.toString() + ",";
-						}
-						result.pop_back();
-						result += ']';
-					}
-					else
-					{
-						result += '{';
-						for (auto && v : arg)
-						{
-							result += v.toString() + ",";
-						}
-						result.pop_back();
-						result += '}';
-					}
-				}
-			}, __value);
-		return result;
-	}
-};
-
-class JsonNode
-{
-public:
-	explicit JsonNode(const std::string & key, const JsonValue&val)
-		:__key(std::move(key)), __value(std::move(val)) {}
-	std::string toString()const
-	{
-		return __key.size()==0? __value.toString() :"\""+__key+"\"" + " : " +  __value.toString();
-	}
-	bool operator<(const JsonNode & b)const
-	{
-		return this->__key < b.__key;
-	}
-private:
-	std::string __key;
-	JsonValue __value;
-};
-class Json 
-{
-public:
-	std::string toString()const
-	{
-		std::string result;
-		result += "{\n";
-		for (auto & node : jsons)
-		{
-			result.push_back('\t');
-			result += node.toString();
-			result.push_back(',');
-			result.push_back('\n');
-		}
-		result.pop_back();
-		result.pop_back();
-		result += "\n}\n";
-		return result;
-	}
-	void addNode(const JsonNode & jn)
-	{
-		jsons.insert(jn);
-	}
-private:
-	std::set<JsonNode> jsons;
-};
+#include"Json.h"
 int main()
 {
 	/*
@@ -160,7 +45,7 @@ int main()
 			"hardcover": true,
 			"publisher": {
 			    "Company": "Pearson Education",
-			    "Country": "India"
+			    "Country": "India",
 			},
 			"website": null
 		}
@@ -173,7 +58,8 @@ int main()
 				JsonNode{"",JsonValue{String("Richard Helm")}},
 				JsonNode{"",JsonValue{String("Ralph Johnson")}},
 				JsonNode{"",JsonValue{String("John Vlissides")}}
-			},true
+			},
+			true
 		}
 	);
 	JsonNode year("year", JsonValue{ 2009.0 });
@@ -182,7 +68,7 @@ int main()
 	JsonNode publisher("publisher", JsonValue{
 			JsonArray{
 				JsonNode{"Company",JsonValue{String("Pearson Education")}},
-				JsonNode{"Country",JsonValue{String("India")}}
+				JsonNode{"Country",JsonValue{String("India")}},
 			},
 			false
 		}
@@ -198,5 +84,24 @@ int main()
 	js.addNode(publisher);
 	js.addNode(website);
 	std::cout << js.toString() << std::endl;
+	try
+	{
+		auto && company_ret = js["publisher"]["Company"];
+		std::cout << company_ret << std::endl;
+
+		auto && year_ret = js["year"];
+		std::cout << year_ret << std::endl;
+
+		auto && author_ret = js["author"];
+		std::cout << author_ret << std::endl;
+
+		auto && error_ret = js["abc"];
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << e.what();
+		exit(1);
+	}
+	// auto error_ret = sub_ret["a"];
 	return 0;
 }
